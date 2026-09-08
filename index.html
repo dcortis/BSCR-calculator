@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BSCR Calculator</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f4f8;
+      display: flex;
+      justify-content: center;
+      padding: 30px 15px;
+      margin: 0;
+    }
+    .card {
+      background: #ffffff;
+      max-width: 520px;
+      width: 100%;
+      border-radius: 12px;
+      padding: 28px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      box-sizing: border-box;
+    }
+    h2 {
+      margin-top: 0;
+      margin-bottom: 6px;
+      color: #1e3a5f;
+    }
+    .trainer-credit {
+      font-size: 14px;
+      color: #64748b;
+      margin-top: 0;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e2e8f0;
+      line-height: 1.5;
+    }
+    .trainer-credit a {
+      color: #0a66c2;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .trainer-credit a:hover {
+      text-decoration: underline;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      font-size: 14px;
+      color: #334155;
+      margin-bottom: 4px;
+    }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 16px; /* 16px prevents iOS Safari from auto-zooming on focus */
+      box-sizing: border-box;
+    }
+    input:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+    .results {
+      margin-top: 24px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 15px;
+    }
+    .row:last-child {
+      margin-bottom: 0;
+    }
+    .highlight {
+      font-weight: 700;
+      color: #1e3a5f;
+      font-size: 17px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 8px;
+    }
+    .badge {
+      color: #059669;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>BSCR Calculator</h2>
+  
+  <!-- LinkedIn / Trainer Credit -->
+  <p class="trainer-credit">
+    This tool is used for training delivered by 
+    <a href="https://www.linkedin.com/in/dcortis/" target="_blank" rel="noopener noreferrer">
+      Dominic Cortis
+    </a>
+  </p>
+  
+  <div class="form-group">
+    <label for="mkt">Market Risk SCR (€)</label>
+    <input type="number" id="mkt" value="1815" min="0" oninput="calculateBSCR()" />
+  </div>
+
+  <div class="form-group">
+    <label for="def">Counterparty Default Risk SCR (€)</label>
+    <input type="number" id="def" value="2181" min="0" oninput="calculateBSCR()" />
+  </div>
+
+  <div class="form-group">
+    <label for="life">Life Underwriting Risk SCR (€)</label>
+    <input type="number" id="life" value="0" min="0" oninput="calculateBSCR()" />
+  </div>
+
+  <div class="form-group">
+    <label for="health">Health Underwriting Risk SCR (€)</label>
+    <input type="number" id="health" value="1212" min="0" oninput="calculateBSCR()" />
+  </div>
+
+  <div class="form-group">
+    <label for="nl">Non-Life Underwriting Risk SCR (€)</label>
+    <input type="number" id="nl" value="4399" min="0" oninput="calculateBSCR()" />
+  </div>
+
+  <div class="results">
+    <div class="row">
+      <span>Undiversified SCR Sum:</span>
+      <span id="undiversified">0</span>
+    </div>
+    <div class="row">
+      <span>Diversification Benefit:</span>
+      <span class="badge" id="benefit">0</span>
+    </div>
+    <div class="row highlight">
+      <span>Aggregated BSCR:</span>
+      <span id="bscr">0</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Solvency II Standard Formula Correlation Matrix (Art. 164)
+  // Order: [Market, Default, Life, Health, Non-Life]
+  const CORR = [
+    [1.00, 0.25, 0.25, 0.25, 0.25], // Market
+    [0.25, 1.00, 0.25, 0.25, 0.50], // Default
+    [0.25, 0.25, 1.00, 0.25, 0.00], // Life
+    [0.25, 0.25, 0.25, 1.00, 0.00], // Health
+    [0.25, 0.50, 0.00, 0.00, 1.00]  // Non-Life
+  ];
+
+  function calculateBSCR() {
+    const risks = [
+      parseFloat(document.getElementById('mkt').value) || 0,
+      parseFloat(document.getElementById('def').value) || 0,
+      parseFloat(document.getElementById('life').value) || 0,
+      parseFloat(document.getElementById('health').value) || 0,
+      parseFloat(document.getElementById('nl').value) || 0
+    ];
+
+    let sumSquaresAndCross = 0;
+    let undiversified = 0;
+
+    for (let i = 0; i < 5; i++) {
+      undiversified += risks[i];
+      for (let j = 0; j < 5; j++) {
+        sumSquaresAndCross += CORR[i][j] * risks[i] * risks[j];
+      }
+    }
+
+    const bscr = Math.sqrt(Math.max(0, sumSquaresAndCross));
+    const benefit = undiversified - bscr;
+
+    document.getElementById('undiversified').innerText = Math.round(undiversified).toLocaleString();
+    document.getElementById('benefit').innerText = Math.round(benefit).toLocaleString();
+    document.getElementById('bscr').innerText = Math.round(bscr).toLocaleString();
+  }
+
+  // Initial calculation on page load
+  calculateBSCR();
+</script>
+
+</body>
+</html>
